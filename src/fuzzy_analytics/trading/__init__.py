@@ -13,11 +13,11 @@ Example
 -------
 >>> from fuzzy_analytics.trading import TradingFuzzySystem
 >>> system = TradingFuzzySystem()
->>> result = system.evaluate(rsi=45, macd_histogram=0.05, volatility=0.2)
->>> result['action']  # e.g. 'buy'
->>> result['confidence']  # e.g. 0.63
+>>> result = system.evaluate(rsi=25, macd_histogram=0.4, volatility=0.2)
+>>> result["action"]
+'strong_buy'
 """
 
-from .system import TradingFuzzySystem, TradingIndicators
+from .system import ACTIONS, TradingFuzzySystem, TradingIndicators
 
-__all__ = ["TradingFuzzySystem", "TradingIndicators"]
+__all__ = ["ACTIONS", "TradingFuzzySystem", "TradingIndicators"]

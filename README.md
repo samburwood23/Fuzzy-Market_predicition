@@ -22,42 +22,29 @@ Traditional binary logic struggles with the inherent uncertainty in financial ma
 ## Features
 
 ### Trading Module
-- Technical indicator computation (RSI, MACD, Bollinger Bands, Moving Averages)
-- Fuzzy trading signal generation (Strong Buy/Buy/Hold/Sell/Strong Sell)
-- Multi-indicator fusion for robust decision making
-- Handles uncertainty in market trends and momentum
+- Technical indicators: RSI (Wilder), MACD, annualised volatility, Bollinger Bands, SMA/EMA and ATR
+- Five-level fuzzy signal (`strong_sell`, `sell`, `hold`, `buy`, `strong_buy`) with a confidence score
+- Combines momentum (MACD) and mean reversion (RSI); high volatility pulls signals towards `hold`
+- Configurable RSI oversold/overbought thresholds
 
 ### Marketing Module
-- Campaign performance evaluation using fuzzy metrics
-- Customer segmentation based on behavioral patterns
-- Marketing ROI optimization with fuzzy rules
-- Recommendation system for campaign strategies
+- Campaign quality evaluation from engagement rate, conversion rate and ROI
+- RFM-style customer segmentation (`champion`, `loyal`, `potential_loyalist`, `at_risk`)
+- A recommended next step for every rating
 
 ### Shareholder Value Module
-- Integrates trading and marketing performance
-- Generates composite shareholder value scores
-- Strategic recommendations based on business performance
-- Holistic view of business health
+- Combines trading performance, marketing ROI, customer retention and market share growth
+- Composite score from 0 to 100 with a `poor` / `fair` / `good` / `excellent` rating
+- Targeted actions for each metric that is clearly weak
 
 ## Installation
 
-### Prerequisites
-- Python 3.8+
-- NumPy
-- scikit-fuzzy
-- pandas (for data handling)
-
-### Install Dependencies
-
-```bash
-pip install numpy scikit-fuzzy pandas matplotlib
-```
-
-### Clone Repository
+Requires Python 3.9+ and NumPy 2.
 
 ```bash
 git clone https://github.com/samburwood23/Fuzzy-Market_predicition.git
 cd Fuzzy-Market_predicition
+pip install -e '.[dev]'
 ```
 
 ## Quick Start
@@ -65,29 +52,23 @@ cd Fuzzy-Market_predicition
 ### Trading System
 
 ```python
-from fuzzy_analytics import TradingFuzzySystem, TradingIndicators
-import pandas as pd
+from fuzzy_analytics import TradingFuzzySystem
 
-# Load your market data
-market_data = pd.read_csv('market_data.csv')
-
-# Initialize trading system
 trading_system = TradingFuzzySystem()
 
-# Compute technical indicators
-indicators = TradingIndicators()
-rsi = indicators.calculate_rsi(market_data['close'])
-macd, signal = indicators.calculate_macd(market_data['close'])
-
-# Generate trading signal
-signal = trading_system.evaluate(
-    rsi=rsi[-1],
-    macd_histogram=macd[-1] - signal[-1],
-    price_trend='bullish'
+# Either pass indicator values directly...
+result = trading_system.evaluate(
+    rsi=25,               # 0–100
+    macd_histogram=0.4,   # MACD histogram as a % of price
+    volatility=0.2,       # annualised, 0.2 = 20%
 )
+print(result["action"], round(result["confidence"], 2))   # strong_buy 1.0
 
-print(f"Trading Signal: {signal}")
-# Output: "Strong Buy", "Buy", "Hold", "Sell", or "Strong Sell"
+# ...or let the system compute them from closing prices (oldest first)
+import pandas as pd
+closes = pd.read_csv("market_data.csv")["close"]
+result = trading_system.evaluate_prices(closes)
+print(result["action"], result["indicators"])
 ```
 
 ### Marketing System
@@ -95,28 +76,21 @@ print(f"Trading Signal: {signal}")
 ```python
 from fuzzy_analytics import MarketingFuzzySystem, CustomerSegmentationSystem
 
-# Initialize marketing system
 marketing_system = MarketingFuzzySystem()
-
-# Evaluate campaign performance
-campaign_score = marketing_system.evaluate_campaign(
-    reach=0.75,           # 75% reach
-    engagement=0.60,      # 60% engagement
-    conversion=0.08       # 8% conversion rate
+campaign = marketing_system.evaluate_campaign(
+    engagement_rate=0.60,   # 60% of the audience engaged
+    conversion_rate=0.08,   # 8% of engaged users converted
+    roi=2.5,                # 2.5x return on spend
 )
+print(campaign["quality"], "-", campaign["recommendation"])
 
-print(f"Campaign Performance: {campaign_score}")
-
-# Customer segmentation
 segmentation = CustomerSegmentationSystem()
-segment = segmentation.classify_customer(
-    purchase_frequency=0.70,
-    average_order_value=0.85,
-    engagement_score=0.65
+customer = segmentation.segment_customer(
+    recency_days=12,
+    purchase_frequency=22,
+    annual_spend=8200,
 )
-
-print(f"Customer Segment: {segment}")
-# Output: e.g., "High-Value", "At-Risk", "Potential Growth"
+print(customer["segment"])   # champion
 ```
 
 ### Shareholder Value Optimization
@@ -124,79 +98,100 @@ print(f"Customer Segment: {segment}")
 ```python
 from fuzzy_analytics import ShareholderValueOptimizer
 
-# Initialize optimizer
 optimizer = ShareholderValueOptimizer()
-
-# Synthesize trading and marketing performance
 result = optimizer.optimize(
     trading_performance=0.75,    # 75% positive trading signals
-    marketing_roi=2.5,            # 2.5x return on marketing spend
-    customer_retention=0.82,      # 82% retention rate
-    market_share_growth=0.15      # 15% market share growth
+    marketing_roi=2.5,           # 2.5x return on marketing spend
+    customer_retention=0.82,     # 82% retention rate
+    market_share_growth=0.15,    # +15% market share
 )
 
-print(f"Shareholder Value Score: {result['score']}")
-print(f"Strategic Recommendation: {result['recommendation']}")
-# Output: Actionable strategic guidance based on fuzzy inference
+print(f"Score: {result['score']:.0f} ({result['rating']})")
+print(result["recommendation"])
+for action in result["actions"]:
+    print("-", action)
+```
+
+### Technical Indicators
+
+```python
+from fuzzy_analytics import TradingIndicators
+
+rsi = TradingIndicators.calculate_rsi(closes)
+macd, signal, histogram = TradingIndicators.calculate_macd(closes)
+middle, upper, lower = TradingIndicators.calculate_bollinger_bands(closes)
+atr = TradingIndicators.calculate_atr(highs, lows, closes)
 ```
 
 ## Architecture
 
 ```
-fuzzy_analytics/
-│
-├── __init__.py              # Package initialization
-├── trading.py               # Trading fuzzy system
-│   ├── TradingFuzzySystem
-│   └── TradingIndicators
-├── marketing.py             # Marketing fuzzy system
-│   ├── MarketingFuzzySystem
-│   └── CustomerSegmentationSystem
-└── shareholder_value.py     # Shareholder value optimizer
-    └── ShareholderValueOptimizer
+src/fuzzy_analytics/
+├── __init__.py               # Public API
+├── core/                     # Generic Mamdani fuzzy engine
+│   ├── membership_functions.py   # triangular, trapezoidal, gaussian, sigmoid
+│   ├── fuzzy_variable.py         # FuzzySet, FuzzyVariable
+│   ├── fuzzy_rule.py             # FuzzyRule (AND of antecedents, weighted)
+│   └── fuzzy_system.py           # FuzzyInferenceSystem (centroid defuzzification)
+├── indicators/               # RSI, MACD, volatility, Bollinger, SMA/EMA, ATR
+├── trading/                  # TradingFuzzySystem
+├── marketing/                # MarketingFuzzySystem, CustomerSegmentationSystem
+└── shareholder_value/        # ShareholderValueOptimizer
+tests/                        # pytest suite
 ```
 
 ## Fuzzy Logic Approach
 
-### Membership Functions
+All systems use **Mamdani inference** built on the small engine in `fuzzy_analytics.core`:
 
-The system uses multiple membership function types:
+1. **Fuzzification**: each input is clipped to its variable's domain and mapped to membership degrees. Edge sets are trapezoidal "shoulders", so extreme values (an ROI of 50, say) still count fully as "high".
+2. **Rule evaluation**: antecedents are combined with the minimum (AND) and scaled by the rule's weight.
+3. **Aggregation**: each rule clips its output set at its firing strength; clipped sets are combined with the maximum.
+4. **Defuzzification**: the centroid of the aggregated set gives the crisp output, which is then mapped to the label it belongs to most strongly.
 
-- **Triangular**: For well-defined ranges (e.g., RSI overbought/oversold)
-- **Trapezoidal**: For plateaus in linguistic variables
-- **Gaussian**: For smooth transitions between states
+Membership functions accept NumPy arrays, so the output universe is evaluated in a single vectorised pass.
 
-### Inference Methods
+### Building Your Own System
 
-- **Mamdani Inference**: Used for trading signals where output is a fuzzy set
-- **Sugeno Inference**: Used for shareholder value scores requiring crisp numerical output
-- **Fuzzy C-Means Clustering**: Applied in customer segmentation
+```python
+from fuzzy_analytics.core import FuzzyInferenceSystem, FuzzyRule, FuzzySet, FuzzyVariable
+from fuzzy_analytics.core import membership_functions as mf
+
+temp = FuzzyVariable("temperature", (0, 40))
+temp.add_set("cold", FuzzySet(mf.trapezoidal(0, 0, 10, 20)))
+temp.add_set("hot", FuzzySet(mf.trapezoidal(20, 30, 40, 40)))
+
+fan = FuzzyVariable("fan_speed", (0, 100))
+fan.add_set("slow", FuzzySet(mf.triangular(0, 20, 50)))
+fan.add_set("fast", FuzzySet(mf.triangular(50, 80, 100)))
+
+system = FuzzyInferenceSystem(
+    [temp], fan,
+    [FuzzyRule([(temp, "cold")], (fan, "slow")),
+     FuzzyRule([(temp, "hot")], (fan, "fast"))],
+)
+print(system.evaluate({"temperature": 27}))
+
+# See which rules fired and how strongly
+for rule, strength in system.rule_activations({"temperature": 27}):
+    print(f"{strength:.2f}  {rule}")
+```
 
 ### Rule Base Examples
 
-**Trading Rules:**
+**Trading rules:**
 ```
-IF RSI is Oversold AND MACD is Bullish THEN Signal is Strong_Buy
-IF RSI is Neutral AND MACD is Neutral THEN Signal is Hold
-IF RSI is Overbought AND MACD is Bearish THEN Signal is Strong_Sell
-```
-
-**Marketing Rules:**
-```
-IF Reach is High AND Engagement is High THEN Campaign_Quality is Excellent
-IF Conversion is Low AND Engagement is High THEN Recommendation is Optimize_Funnel
+IF rsi is oversold AND macd_histogram is bullish THEN signal is strong_buy
+IF rsi is neutral AND macd_histogram is neutral THEN signal is hold
+IF rsi is overbought AND macd_histogram is bearish THEN signal is strong_sell
+IF volatility is high THEN signal is hold (weight 0.7)
 ```
 
-## Technical Indicators
-
-The `TradingIndicators` class computes:
-
-- **RSI (Relative Strength Index)**: Momentum indicator (0-100)
-- **MACD (Moving Average Convergence Divergence)**: Trend-following momentum
-- **Bollinger Bands**: Volatility indicator
-- **SMA/EMA**: Simple and Exponential Moving Averages
-- **ATR (Average True Range)**: Volatility measurement
-- **Volume Analysis**: Trading volume patterns
+**Marketing rules:**
+```
+IF engagement_rate is high AND conversion_rate is high AND roi is high THEN quality is excellent
+IF engagement_rate is high AND conversion_rate is low THEN quality is average (weight 0.8)
+```
 
 ## Use Cases
 
@@ -212,36 +207,19 @@ Use fuzzy customer segmentation to identify high-value customers and predict chu
 ### 4. Strategic Business Planning
 Combine trading performance and marketing effectiveness to provide executive-level insights on shareholder value creation.
 
-## Configuration
+## Performance
 
-The fuzzy systems can be customized by modifying membership functions and rule bases:
-
-```python
-# Example: Customize RSI thresholds
-trading_system = TradingFuzzySystem()
-trading_system.configure_rsi(
-    oversold_threshold=25,  # More aggressive oversold level
-    overbought_threshold=75  # More aggressive overbought level
-)
-```
-
-## Performance Considerations
-
-- **Computational Efficiency**: Fuzzy inference is lightweight compared to deep learning
-- **Real-Time Capability**: Suitable for high-frequency trading applications
-- **Scalability**: Can process multiple assets/campaigns in parallel
-- **Interpretability**: Every decision can be traced to specific rules
+- A trading evaluation takes roughly a quarter of a millisecond on a laptop, which suits batch screening and bar-by-bar strategies (not high-frequency trading).
+- Systems are stateless after construction, so you can evaluate many assets or campaigns in parallel.
+- Every decision can be traced to specific rules via `rule_activations`.
 
 ## Testing
 
 ```bash
-# Run unit tests
-python -m pytest tests/
-
-# Run specific module tests
-python -m pytest tests/test_trading.py
-python -m pytest tests/test_marketing.py
+pytest
 ```
+
+This runs the unit tests in `tests/` and the examples in the docstrings. GitHub Actions runs the same suite on every push.
 
 ## Roadmap
 
@@ -251,6 +229,7 @@ python -m pytest tests/test_marketing.py
 - [ ] Real-time market data integration via APIs
 - [ ] Web dashboard for visualization
 - [ ] Backtesting framework with historical data
+- [ ] OR operators and Sugeno-style inference in the core engine
 - [ ] Export to ONNX for production deployment
 
 ## Contributing
@@ -290,10 +269,7 @@ Specialist Engineering (DevOps) | HashiCorp Vault SME
 
 ## Acknowledgments
 
-Built with:
-- [scikit-fuzzy](https://github.com/scikit-fuzzy/scikit-fuzzy) - Fuzzy logic toolkit for Python
-- [NumPy](https://numpy.org/) - Numerical computing
-- [Pandas](https://pandas.pydata.org/) - Data manipulation
+Built with [NumPy](https://numpy.org/). The fuzzy engine is implemented from scratch, with no fuzzy logic library dependency.
 
 ---
 
