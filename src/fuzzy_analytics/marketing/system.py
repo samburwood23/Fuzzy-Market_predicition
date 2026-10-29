@@ -41,28 +41,28 @@ class MarketingFuzzySystem:
     def __init__(self) -> None:
         # Input: engagement rate (0–1)
         self.engagement = FuzzyVariable("engagement_rate", (0.0, 1.0))
-        self.engagement.add_set("low", FuzzySet(mf.triangular(0.0, 0.1, 0.3), label="low"))
+        self.engagement.add_set("low", FuzzySet(mf.trapezoidal(0.0, 0.0, 0.1, 0.3), label="low"))
         self.engagement.add_set("medium", FuzzySet(mf.triangular(0.2, 0.5, 0.8), label="medium"))
-        self.engagement.add_set("high", FuzzySet(mf.triangular(0.6, 0.8, 1.0), label="high"))
+        self.engagement.add_set("high", FuzzySet(mf.trapezoidal(0.6, 0.8, 1.0, 1.0), label="high"))
 
         # Input: conversion rate (0–1)
         self.conversion = FuzzyVariable("conversion_rate", (0.0, 1.0))
-        self.conversion.add_set("low", FuzzySet(mf.triangular(0.0, 0.05, 0.15), label="low"))
+        self.conversion.add_set("low", FuzzySet(mf.trapezoidal(0.0, 0.0, 0.05, 0.15), label="low"))
         self.conversion.add_set("medium", FuzzySet(mf.triangular(0.1, 0.25, 0.4), label="medium"))
-        self.conversion.add_set("high", FuzzySet(mf.triangular(0.3, 0.6, 1.0), label="high"))
+        self.conversion.add_set("high", FuzzySet(mf.trapezoidal(0.3, 0.6, 1.0, 1.0), label="high"))
 
-        # Input: ROI (0–∞).  We cap at 5 for the universe to handle typical ranges
+        # Input: ROI (0–∞).  Values above 5 are clipped to 5 by the inference engine
         self.roi = FuzzyVariable("roi", (0.0, 5.0))
-        self.roi.add_set("low", FuzzySet(mf.triangular(0.0, 0.5, 1.0), label="low"))
+        self.roi.add_set("low", FuzzySet(mf.trapezoidal(0.0, 0.0, 0.5, 1.0), label="low"))
         self.roi.add_set("medium", FuzzySet(mf.triangular(0.8, 1.5, 2.5), label="medium"))
-        self.roi.add_set("high", FuzzySet(mf.triangular(2.0, 3.5, 5.0), label="high"))
+        self.roi.add_set("high", FuzzySet(mf.trapezoidal(2.0, 3.5, 5.0, 5.0), label="high"))
 
         # Output: quality (0–1)
         self.quality = FuzzyVariable("quality", (0.0, 1.0))
-        self.quality.add_set("poor", FuzzySet(mf.triangular(0.0, 0.1, 0.3), label="poor"))
+        self.quality.add_set("poor", FuzzySet(mf.trapezoidal(0.0, 0.0, 0.1, 0.3), label="poor"))
         self.quality.add_set("average", FuzzySet(mf.triangular(0.25, 0.4, 0.55), label="average"))
         self.quality.add_set("good", FuzzySet(mf.triangular(0.5, 0.7, 0.85), label="good"))
-        self.quality.add_set("excellent", FuzzySet(mf.triangular(0.8, 0.9, 1.0), label="excellent"))
+        self.quality.add_set("excellent", FuzzySet(mf.trapezoidal(0.8, 0.9, 1.0, 1.0), label="excellent"))
 
         # Build rules
         rules = []
@@ -129,6 +129,28 @@ class MarketingFuzzySystem:
                 consequent=(self.quality, "good"),
             )
         )
+        # Average campaigns: strengths offset by a weak funnel or modest returns
+        rules.append(
+            FuzzyRule(
+                antecedents=[(self.engagement, "high"), (self.conversion, "low")],
+                consequent=(self.quality, "average"),
+                weight=0.8,
+            )
+        )
+        rules.append(
+            FuzzyRule(
+                antecedents=[(self.roi, "high"), (self.conversion, "low")],
+                consequent=(self.quality, "average"),
+                weight=0.8,
+            )
+        )
+        rules.append(
+            FuzzyRule(
+                antecedents=[(self.engagement, "low"), (self.roi, "medium")],
+                consequent=(self.quality, "average"),
+                weight=0.6,
+            )
+        )
 
         self.system = FuzzyInferenceSystem(
             input_variables=[self.engagement, self.conversion, self.roi],
@@ -168,8 +190,7 @@ class MarketingFuzzySystem:
             "roi": float(roi),
         }
         crisp_output = self.system.evaluate(inputs)
-        memberships = {name: fs.membership(crisp_output) for name, fs in self.quality.sets.items()}
-        best_quality = max(memberships.items(), key=lambda item: item[1])[0]
+        best_quality, _ = self.quality.best_set(crisp_output)
         return {
             "quality": best_quality,
             "recommendation": self.recommendations[best_quality],
@@ -191,30 +212,30 @@ class CustomerSegmentationSystem:
     """
 
     def __init__(self) -> None:
-        # Input: recency in days (0–365)
+        # Input: recency in days (0–365+, older values are clipped to 365)
         self.recency = FuzzyVariable("recency_days", (0.0, 365.0))
-        self.recency.add_set("very_recent", FuzzySet(mf.triangular(0.0, 15.0, 45.0), label="very_recent"))
+        self.recency.add_set("very_recent", FuzzySet(mf.trapezoidal(0.0, 0.0, 15.0, 45.0), label="very_recent"))
         self.recency.add_set("recent", FuzzySet(mf.triangular(30.0, 90.0, 150.0), label="recent"))
-        self.recency.add_set("not_recent", FuzzySet(mf.triangular(120.0, 240.0, 365.0), label="not_recent"))
+        self.recency.add_set("not_recent", FuzzySet(mf.trapezoidal(120.0, 240.0, 365.0, 365.0), label="not_recent"))
 
         # Input: purchase frequency (0–30+)
         self.frequency = FuzzyVariable("purchase_frequency", (0.0, 30.0))
-        self.frequency.add_set("low", FuzzySet(mf.triangular(0.0, 1.0, 5.0), label="low"))
+        self.frequency.add_set("low", FuzzySet(mf.trapezoidal(0.0, 0.0, 1.0, 5.0), label="low"))
         self.frequency.add_set("medium", FuzzySet(mf.triangular(4.0, 10.0, 16.0), label="medium"))
-        self.frequency.add_set("high", FuzzySet(mf.triangular(12.0, 20.0, 30.0), label="high"))
+        self.frequency.add_set("high", FuzzySet(mf.trapezoidal(12.0, 20.0, 30.0, 30.0), label="high"))
 
-        # Input: annual spend (0–10000+).  We cap at 10000 for the universe
+        # Input: annual spend (0–10000+).  Values above 10000 are clipped by the inference engine
         self.spend = FuzzyVariable("annual_spend", (0.0, 10000.0))
-        self.spend.add_set("low", FuzzySet(mf.triangular(0.0, 500.0, 2000.0), label="low"))
+        self.spend.add_set("low", FuzzySet(mf.trapezoidal(0.0, 0.0, 500.0, 2000.0), label="low"))
         self.spend.add_set("medium", FuzzySet(mf.triangular(1500.0, 3500.0, 6000.0), label="medium"))
-        self.spend.add_set("high", FuzzySet(mf.triangular(5000.0, 7500.0, 10000.0), label="high"))
+        self.spend.add_set("high", FuzzySet(mf.trapezoidal(5000.0, 7500.0, 10000.0, 10000.0), label="high"))
 
         # Output: segment (0–1)
         self.segment = FuzzyVariable("segment", (0.0, 1.0))
-        self.segment.add_set("at_risk", FuzzySet(mf.triangular(0.0, 0.1, 0.3), label="at_risk"))
+        self.segment.add_set("at_risk", FuzzySet(mf.trapezoidal(0.0, 0.0, 0.1, 0.3), label="at_risk"))
         self.segment.add_set("potential_loyalist", FuzzySet(mf.triangular(0.25, 0.4, 0.55), label="potential_loyalist"))
         self.segment.add_set("loyal", FuzzySet(mf.triangular(0.5, 0.65, 0.8), label="loyal"))
-        self.segment.add_set("champion", FuzzySet(mf.triangular(0.75, 0.9, 1.0), label="champion"))
+        self.segment.add_set("champion", FuzzySet(mf.trapezoidal(0.75, 0.9, 1.0, 1.0), label="champion"))
 
         # Build rules
         rules = []
@@ -299,8 +320,7 @@ class CustomerSegmentationSystem:
             "annual_spend": float(annual_spend),
         }
         crisp_output = self.system.evaluate(inputs)
-        memberships = {name: fs.membership(crisp_output) for name, fs in self.segment.sets.items()}
-        best_segment = max(memberships.items(), key=lambda item: item[1])[0]
+        best_segment, _ = self.segment.best_set(crisp_output)
         descriptions = {
             "champion": "Recent, frequent, and high‑value customer.",
             "loyal": "Regular customer with consistent purchases.",
